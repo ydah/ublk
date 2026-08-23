@@ -94,19 +94,29 @@ bundle exec rbs validate
 ```
 
 The destructive system suite only runs when explicitly enabled inside a VM.
-It creates a RAM disk, performs raw I/O, builds and mounts ext4, unmounts it,
-and runs fsck.
+It covers 64 MiB raw reads, maximum-I/O boundary crossing, ext4 and fsck,
+flush/discard callbacks, errno propagation, device deletion, SIGKILL recovery,
+four-way verified fio, a one-minute RSS leak check, and 1,000 control opens.
 
 ```sh
 tools/vm/run.sh v6.6
 tools/vm/run.sh v6.12
 ```
 
-Run the fio workload with `UBLK_BENCH=1 bundle exec ruby tools/bench.rb` in the
-same VM. No hardware-independent benchmark is published yet; results depend
-heavily on CPU, Ruby version, GC settings, and VM acceleration. Expect Ruby
-callbacks and the GVL to make this substantially slower than `ublksrv`'s C
-loop target.
+Run 4K random-read, random-write, and sequential-read fio workloads in the
+same VM:
+
+```sh
+UBLK_BENCH=1 bundle exec ruby tools/bench.rb
+UBLK_BENCH=1 UBLK_BENCH_GC_STRESS=1 bundle exec ruby tools/bench.rb
+UBLK_BENCH=1 UBLK_BENCH_DEVICE=/dev/ublkb0 bundle exec ruby tools/bench.rb
+```
+
+The last form measures an externally started device, such as `ublksrv`'s C
+loop target, with the identical fio arguments. fio's JSON includes IOPS and
+p99 latency. No hardware-independent number is claimed: CPU, Ruby, GC, and VM
+acceleration materially change the result, and Ruby callbacks remain bounded
+by the GVL.
 
 ## License
 
