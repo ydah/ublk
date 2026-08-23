@@ -155,13 +155,20 @@ RSpec.describe "UBLK system behavior" do
     run!("fio", "--name=verify", "--rw=randwrite", "--size=16m", "--offset_increment=16m",
          "--verify=crc32c", "--do_verify=1", "--verify_fatal=1", *common)
 
-    GC.start
-    before = File.read("/proc/self/status")[/^VmRSS:\s+(\d+)/, 1].to_i
+    samples = []
+    sampler = Thread.new do
+      loop do
+        GC.start
+        samples << File.read("/proc/self/status")[/^VmRSS:\s+(\d+)/, 1].to_i
+        sleep 5
+      end
+    end
     run!("fio", "--name=leak", "--rw=randrw", "--runtime=60", "--time_based=1", *common)
-    GC.start
-    after = File.read("/proc/self/status")[/^VmRSS:\s+(\d+)/, 1].to_i
-    expect(after - before).to be < 32 * 1024
+    sampler.kill.join
+    midpoint = samples.length / 2
+    expect(samples.drop(midpoint).min - samples.take(midpoint).min).to be < 32 * 1024
   ensure
+    sampler&.kill&.join
     device&.delete
   end
 

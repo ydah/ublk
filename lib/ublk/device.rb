@@ -44,7 +44,15 @@ module UBLK
 
     def self.recover(target, id:, mlock: true)
       control = Control.new
-      control.start_user_recovery(id)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 10
+      begin
+        control.start_user_recovery(id)
+      rescue Errno::EBUSY
+        raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+        sleep 0.01
+        retry
+      end
       info = control.get_dev_info(id)
       params = Params.from_target(target, max_io_bytes: info.max_io_bytes)
       new(target, control, info, params, mlock:, recovering: true).tap { |device| owned << device }

@@ -63,4 +63,24 @@ RSpec.describe UBLK::Device do
     expect { device.delete }.to raise_error(RuntimeError, "worker failed")
     expect(calls).to eq([[:delete, 9], [:close]])
   end
+
+  it "waits for kernel quiescing before user recovery" do
+    attempts = 0
+    control = Object.new
+    control.define_singleton_method(:start_user_recovery) do |*|
+      attempts += 1
+      raise Errno::EBUSY if attempts < 3
+    end
+    control.define_singleton_method(:get_dev_info) do |*|
+      UBLK::DeviceInfo.new(4, 1, 8, 2, 4096, 0, 0, 0, 0)
+    end
+    allow(UBLK::Control).to receive(:new).and_return(control)
+    target = UBLK::Target.new(size: 4096, depth: 8)
+
+    device = described_class.recover(target, id: 4, mlock: false)
+
+    expect(attempts).to eq(3)
+  ensure
+    described_class.owned.delete(device) if device
+  end
 end
