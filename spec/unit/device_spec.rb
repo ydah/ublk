@@ -2,6 +2,7 @@
 
 RSpec.describe UBLK::Device do
   it "starts workers before the device and cleans up in order" do
+    calls = []
     server_class = Class.new do
       def initialize(*) = @closed = false
 
@@ -11,12 +12,12 @@ RSpec.describe UBLK::Device do
       end
 
       def close = @closed = true
+      define_method(:release) { calls << [:release] }
     end
     native = Module.new
     native.const_set(:Server, server_class)
     stub_const("UBLK::Native", native)
 
-    calls = []
     control = Object.new
     control.define_singleton_method(:start_dev) { |id, **| calls << [:start, id] }
     control.define_singleton_method(:stop_dev) { |id| calls << [:stop, id] }
@@ -29,7 +30,7 @@ RSpec.describe UBLK::Device do
 
     device.start.delete
 
-    expect(calls).to eq([[:start, 7], [:stop, 7], [:delete, 7], [:close]])
+    expect(calls).to eq([[:start, 7], [:stop, 7], [:release], [:delete, 7], [:close]])
   end
 
   it "deletes the kernel device even when a worker failed" do
@@ -41,6 +42,7 @@ RSpec.describe UBLK::Device do
         raise "worker failed"
       end
       def close = nil
+      def release = nil
     end
     native = Module.new
     native.const_set(:Server, server_class)

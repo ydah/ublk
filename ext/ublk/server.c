@@ -38,13 +38,19 @@ static void queue_close(ublk_queue *queue)
   queue->event_fd = -1;
 }
 
+static void server_release_resources(ublk_server *server)
+{
+  unsigned index;
+  for (index = 0; index < server->queues; index++) queue_close(&server->queue[index]);
+  if (server->fd >= 0) close(server->fd);
+  server->fd = -1;
+}
+
 static void server_free(void *pointer)
 {
   ublk_server *server = pointer;
-  unsigned index;
   atomic_store(&server->closed, 1);
-  for (index = 0; index < server->queues; index++) queue_close(&server->queue[index]);
-  if (server->fd >= 0) close(server->fd);
+  server_release_resources(server);
   xfree(server->queue);
   xfree(server);
 }
@@ -57,7 +63,7 @@ static size_t server_size(const void *pointer)
 
 static const rb_data_type_t server_type = {
   "UBLK::Native::Server",
-  {NULL, server_free, server_size, NULL},
+  {NULL, server_free, server_size, NULL, {NULL}},
   NULL, NULL, RUBY_TYPED_FREE_IMMEDIATELY
 };
 
@@ -358,9 +364,20 @@ static VALUE server_close(VALUE self)
   TypedData_Get_Struct(self, ublk_server, &server_type, server);
   if (atomic_exchange(&server->closed, 1)) return Qnil;
   for (index = 0; index < server->queues; index++) {
-    if (server->queue[index].event_fd >= 0)
-      (void)write(server->queue[index].event_fd, &value, sizeof(value));
+    if (server->queue[index].event_fd >= 0 &&
+        write(server->queue[index].event_fd, &value, sizeof(value)) < 0 && errno != EAGAIN)
+      rb_sys_fail("eventfd write");
   }
+  return Qnil;
+}
+
+static VALUE server_release(VALUE self)
+{
+  ublk_server *server;
+  TypedData_Get_Struct(self, ublk_server, &server_type, server);
+  ublk_check_pid(server->pid);
+  if (!atomic_load(&server->closed)) rb_raise(rb_eRuntimeError, "close ublk server before releasing it");
+  server_release_resources(server);
   return Qnil;
 }
 
@@ -390,5 +407,6 @@ void ublk_init_server(void)
   rb_define_method(cServer, "initialize", server_initialize, 3);
   rb_define_method(cServer, "run", server_run, 3);
   rb_define_method(cServer, "close", server_close, 0);
+  rb_define_method(cServer, "release", server_release, 0);
   rb_define_singleton_method(ublk_native_module, "lock_memory!", native_lock_memory, 0);
 }

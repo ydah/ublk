@@ -108,6 +108,7 @@ module UBLK
     rescue Exception
       @server&.close
       join_workers(@workers, suppress: true)
+      @server&.release
       @server = @workers = nil
       raise
     end
@@ -122,7 +123,11 @@ module UBLK
       server, workers = @server, @workers
       @server = @workers = nil
       server&.close
-      join_workers(workers)
+      begin
+        join_workers(workers)
+      ensure
+        server&.release
+      end
     end
 
     def delete
