@@ -4,10 +4,13 @@ require "bundler/gem_tasks"
 require "fileutils"
 require "rake/extensiontask"
 require "rspec/core/rake_task"
+require "yard"
 
 Rake::ExtensionTask.new("ublk") do |ext|
   ext.lib_dir = "lib/ublk"
 end
+
+YARD::Rake::YardocTask.new
 
 namespace :test do
   RSpec::Core::RakeTask.new(:unit) { |task| task.pattern = "spec/unit/**/*_spec.rb" }

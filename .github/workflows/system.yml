@@ -1,0 +1,30 @@
+name: Kernel system tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  system:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel: [v6.6, v6.12]
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install VM and native dependencies
+        run: sudo apt-get update && sudo apt-get install -y e2fsprogs fio liburing-dev qemu-system-x86 virtme-ng
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+      - name: Compile extension
+        run: bundle exec rake compile
+      - name: Run on ${{ matrix.kernel }}
+        run: tools/vm/run.sh ${{ matrix.kernel }}

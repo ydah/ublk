@@ -1,0 +1,96 @@
+module UBLK
+  VERSION: String
+
+  class Error < StandardError
+  end
+
+  class UnsupportedError < Error
+  end
+
+  class DeviceError < Error
+  end
+
+  def self.supported?: () -> bool
+  def self.ensure_supported!: () -> nil
+  def self.native_load_error: () -> LoadError?
+
+  class Target
+    attr_reader size: Integer
+    attr_reader queues: Integer
+    attr_reader depth: Integer
+
+    def initialize: (size: Integer, ?queues: Integer, ?depth: Integer) -> void
+    def read: (Integer offset, Integer length) -> String
+    def write: (Integer offset, String data) -> Integer
+    def flush: () -> Integer
+    def discard: (Integer offset, Integer length) -> Integer
+    def write_zeroes: (Integer offset, Integer length) -> Integer
+    def logical_block_size: () -> Integer
+    def physical_block_size: () -> Integer
+    def read_only?: () -> bool
+    def rotational?: () -> bool
+  end
+
+  class DeviceInfo
+    attr_reader id: Integer
+    attr_reader queues: Integer
+    attr_reader depth: Integer
+    attr_reader state: Integer
+    attr_reader max_io_bytes: Integer
+    attr_reader pid: Integer
+    attr_reader flags: Integer
+    attr_reader owner_uid: Integer
+    attr_reader owner_gid: Integer
+
+    def path: () -> String
+    def char_path: () -> String
+    def self.from_native: (Array[Integer] values) -> DeviceInfo
+  end
+
+  class Params
+    attr_reader size: Integer
+    attr_reader logical_block_size: Integer
+    attr_reader physical_block_size: Integer
+    attr_reader max_io_bytes: Integer
+    attr_reader read_only: bool
+    attr_reader rotational: bool
+    attr_reader discard: bool
+
+    def initialize: (size: Integer, ?logical_block_size: Integer, ?physical_block_size: Integer, ?max_io_bytes: Integer, ?read_only: bool, ?rotational: bool, ?discard: bool) -> void
+    def self.from_target: (Target target, ?max_io_bytes: Integer) -> Params
+  end
+
+  class Control
+    SYSFS: String
+
+    def initialize: () -> void
+    def add_dev: (?id: Integer?, ?queues: Integer, ?depth: Integer, ?max_io_bytes: Integer, ?recovery: bool) -> DeviceInfo
+    def set_params: (Integer id, Params params) -> Params
+    def start_dev: (Integer id, ?pid: Integer) -> bool
+    def stop_dev: (Integer id) -> bool
+    def del_dev: (Integer id) -> bool
+    def start_user_recovery: (Integer id) -> bool
+    def end_user_recovery: (Integer id, ?pid: Integer) -> bool
+    def get_dev_info: (Integer id) -> DeviceInfo
+    def list: () -> Array[DeviceInfo]
+    def close: () -> nil
+  end
+
+  class Device
+    attr_reader target: Target
+    attr_reader info: DeviceInfo
+    attr_reader params: Params
+
+    def self.create: (Target target, ?id: Integer?, ?queues: Integer, ?depth: Integer, ?max_io_bytes: Integer, ?recovery: bool, ?mlock: bool) -> Device
+    def self.recover: (Target target, id: Integer, ?mlock: bool) -> Device
+    def self.list: () -> Array[DeviceInfo]
+    def self.delete_all!: () -> void
+    def id: () -> Integer
+    def path: () -> String
+    def char_path: () -> String
+    def start: (?threads: :auto | Integer) -> Device
+    def stop: () -> Device
+    def delete: () -> Device
+    def run: (?threads: :auto | Integer) -> Device
+  end
+end
