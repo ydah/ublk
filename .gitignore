@@ -11,3 +11,9 @@
 Gemfile.lock
 .rspec_status
 *.gem
+/ext/**/Makefile
+/ext/**/*.o
+/ext/**/*.so
+/ext/**/extconf.h
+/ext/**/mkmf.log
+/lib/**/*.bundle
