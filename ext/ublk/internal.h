@@ -8,7 +8,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <liburing.h>
-#include <linux/ublk_cmd.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>

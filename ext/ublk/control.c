@@ -127,7 +127,7 @@ VALUE ublk_native_supported(VALUE self)
     return Qfalse;
   }
 
-  result = control_submit(&control, UBLK_RB_U_CMD(UBLK_CMD_GET_FEATURES), 0,
+  result = control_submit(&control, UBLK_RB_U_READ_CMD(UBLK_CMD_GET_FEATURES), 0,
                           &features, sizeof(features), 0);
   io_uring_queue_exit(&control.ring);
   close(control.fd);
@@ -182,7 +182,7 @@ static VALUE control_add_dev(VALUE self, VALUE id, VALUE queues, VALUE depth,
   info.flags = UBLK_F_USER_COPY | UBLK_F_CMD_IOCTL_ENCODE;
   if (RTEST(recovery)) info.flags |= UBLK_F_USER_RECOVERY;
 
-  result = control_submit(control, UBLK_RB_U_CMD(UBLK_CMD_ADD_DEV), info.dev_id,
+  result = control_submit(control, UBLK_RB_U_RDWR_CMD(UBLK_CMD_ADD_DEV), info.dev_id,
                           &info, sizeof(info), 0);
   ublk_raise_result(result, "UBLK_U_CMD_ADD_DEV");
   return info_to_array(&info);
@@ -212,6 +212,7 @@ static VALUE control_set_params(VALUE self, VALUE id, VALUE size,
   params.basic.io_min_shift = params.basic.logical_bs_shift;
   params.basic.max_sectors = NUM2ULL(max_io) >> 9;
   params.basic.dev_sectors = NUM2ULL(size) >> 9;
+  params.basic.attrs = UBLK_ATTR_VOLATILE_CACHE;
   if (RTEST(read_only)) params.basic.attrs |= UBLK_ATTR_READ_ONLY;
   if (RTEST(rotational)) params.basic.attrs |= UBLK_ATTR_ROTATIONAL;
   if (RTEST(discard)) {
@@ -222,7 +223,7 @@ static VALUE control_set_params(VALUE self, VALUE id, VALUE size,
     params.discard.max_discard_segments = 1;
   }
 
-  result = control_submit(control, UBLK_RB_U_CMD(UBLK_CMD_SET_PARAMS), NUM2UINT(id),
+  result = control_submit(control, UBLK_RB_U_RDWR_CMD(UBLK_CMD_SET_PARAMS), NUM2UINT(id),
                           &params, sizeof(params), 0);
   ublk_raise_result(result, "UBLK_U_CMD_SET_PARAMS");
   return Qtrue;
@@ -230,7 +231,7 @@ static VALUE control_set_params(VALUE self, VALUE id, VALUE size,
 
 static VALUE control_simple(VALUE self, VALUE id, unsigned op, const char *name, uint64_t data)
 {
-  int result = control_submit(get_control(self), UBLK_RB_U_CMD(op), NUM2UINT(id), NULL, 0, data);
+  int result = control_submit(get_control(self), UBLK_RB_U_RDWR_CMD(op), NUM2UINT(id), NULL, 0, data);
   ublk_raise_result(result, name);
   return Qtrue;
 }
@@ -268,7 +269,7 @@ static VALUE control_get_info(VALUE self, VALUE id)
 
   memset(&info, 0, sizeof(info));
   info.dev_id = NUM2UINT(id);
-  result = control_submit(control, UBLK_RB_U_CMD(UBLK_CMD_GET_DEV_INFO), info.dev_id,
+  result = control_submit(control, UBLK_RB_U_READ_CMD(UBLK_CMD_GET_DEV_INFO), info.dev_id,
                           &info, sizeof(info), 0);
   ublk_raise_result(result, "UBLK_U_CMD_GET_DEV_INFO");
   return info_to_array(&info);

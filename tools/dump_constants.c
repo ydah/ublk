@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <linux/ublk_cmd.h>
 #include "../ext/ublk/compat.h"
 
 #define DUMP(value) printf("%s=%llu\n", #value, (unsigned long long)(value))

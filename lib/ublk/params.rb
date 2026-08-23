@@ -27,7 +27,8 @@ module UBLK
         physical_block_size: target.physical_block_size,
         max_io_bytes:,
         read_only: target.read_only?,
-        rotational: target.rotational?
+        rotational: target.rotational?,
+        discard: target.method(:discard).owner != Target || target.method(:write_zeroes).owner != Target
       )
     end
   end

@@ -15,5 +15,7 @@ class LoopTarget < UBLK::Target
   def read_only? = @read_only
 end
 
-abort "usage: #{$PROGRAM_NAME} IMAGE" unless ARGV.one?
-UBLK::Device.create(LoopTarget.new(ARGV.fetch(0))).run
+if $PROGRAM_NAME == __FILE__
+  abort "usage: #{$PROGRAM_NAME} IMAGE" unless ARGV.one?
+  UBLK::Device.create(LoopTarget.new(ARGV.fetch(0))).run
+end

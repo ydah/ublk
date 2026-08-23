@@ -1,10 +1,8 @@
 #include "internal.h"
 
 #ifdef __linux__
-#include <linux/ublk_cmd.h>
 #include <stddef.h>
 #include <unistd.h>
-#include "compat.h"
 #endif
 
 VALUE ublk_module;

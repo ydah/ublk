@@ -7,7 +7,7 @@ module UBLK
     at_exit do
       @owned&.dup&.each do |device|
         device.delete
-      rescue SystemCallError, Error
+      rescue Exception
         nil
       end
     end
@@ -91,7 +91,7 @@ module UBLK
         rescue Exception => error
           ready << error
           raise
-        end
+        end.tap { |worker| worker.report_on_exception = false }
       end
       count.times do
         result = ready.pop
@@ -128,10 +128,17 @@ module UBLK
     def delete
       return self if @deleted
 
-      stop
+      worker_error = nil
+      begin
+        stop
+      rescue Exception => error
+        worker_error = error
+      end
       @control.del_dev(id)
       @deleted = true
       self.class.owned.delete(self)
+      raise worker_error if worker_error
+
       self
     ensure
       @control.close if @deleted
