@@ -305,10 +305,11 @@ static int process_request(ublk_server *server, unsigned qid, unsigned tag, VALU
 
   if (operation == UBLK_IO_OP_READ) {
     if (!RB_TYPE_P(value, T_STRING) || (size_t)RSTRING_LEN(value) != length) return -EIO;
-    value = rb_str_dup(value);
+    value = rb_str_new(RSTRING_PTR(value), RSTRING_LEN(value));
     transfer.buffer = RSTRING_PTR(value);
     transfer.write = 1;
     rb_thread_call_without_gvl(rw_without_gvl, &transfer, RUBY_UBF_IO, NULL);
+    RB_GC_GUARD(value);
     return transfer.result == (ssize_t)length ? (int)length : (transfer.error ? -transfer.error : -EIO);
   }
 

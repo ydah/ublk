@@ -66,9 +66,17 @@ RSpec.describe "UBLK system behavior" do
 
       payload = Random.bytes(1024 * 1024)
       offset = 512 * 1024 - 4096
-      File.open(path, "r+b") { |disk| disk.pwrite(payload, offset) }
-      run!("blockdev", "--flushbufs", path)
-      expect(File.open(path, "rb") { |disk| disk.pread(payload.bytesize, offset) }).to eq(payload)
+      Tempfile.create("ublk-boundary-in") do |input|
+        Tempfile.create("ublk-boundary-out") do |output|
+          input.write(payload)
+          input.flush
+          run!("dd", "if=#{input.path}", "of=#{path}", "bs=1M", "count=1", "seek=#{offset}",
+               "oflag=direct,seek_bytes", "conv=notrunc,fsync")
+          run!("dd", "if=#{path}", "of=#{output.path}", "bs=1M", "count=1", "skip=#{offset}",
+               "iflag=direct,skip_bytes")
+          expect(File.binread(output.path)).to eq(payload)
+        end
+      end
 
       run!("blkdiscard", "--offset", (8 * 1024 * 1024).to_s, "--length", (1024 * 1024).to_s, path)
       wait_until { target.flushes.positive? && target.discards.positive? }
