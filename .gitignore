@@ -17,3 +17,4 @@ Gemfile.lock
 /ext/**/extconf.h
 /ext/**/mkmf.log
 /lib/**/*.bundle
+/lib/**/*.so

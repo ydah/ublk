@@ -1,4 +1,4 @@
-#include "ruby.h"
+#include "internal.h"
 
 #ifdef __linux__
 #include <linux/ublk_cmd.h>
@@ -7,18 +7,8 @@
 #include "compat.h"
 #endif
 
-static VALUE mUBLK;
-static VALUE mNative;
-
-static VALUE native_supported(VALUE self)
-{
-  (void)self;
-#ifdef __linux__
-  return access("/dev/ublk-control", R_OK | W_OK) == 0 ? Qtrue : Qfalse;
-#else
-  return Qfalse;
-#endif
-}
+VALUE ublk_module;
+VALUE ublk_native_module;
 
 static VALUE native_layout(VALUE self)
 {
@@ -36,8 +26,11 @@ static VALUE native_layout(VALUE self)
 
 void Init_ublk(void)
 {
-  mUBLK = rb_define_module("UBLK");
-  mNative = rb_define_module_under(mUBLK, "Native");
-  rb_define_singleton_method(mNative, "supported?", native_supported, 0);
-  rb_define_singleton_method(mNative, "layout", native_layout, 0);
+  ublk_module = rb_define_module("UBLK");
+  ublk_native_module = rb_define_module_under(ublk_module, "Native");
+  rb_define_singleton_method(ublk_native_module, "supported?", ublk_native_supported, 0);
+  rb_define_singleton_method(ublk_native_module, "layout", native_layout, 0);
+  ublk_init_constants();
+  ublk_init_control();
+  ublk_init_server();
 }

@@ -18,5 +18,6 @@ RSpec.describe UBLK do
       io_desc_size: 24,
       io_desc_start_sector_offset: 8
     )
+    expect(UBLK::Native::UBLK_F_USER_COPY).to be_a(Integer)
   end
 end

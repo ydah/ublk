@@ -2,6 +2,20 @@
 
 module UBLK
   class Device
+    @owned = []
+
+    at_exit do
+      @owned&.dup&.each do |device|
+        device.delete
+      rescue SystemCallError, Error
+        nil
+      end
+    end
+
+    class << self
+      attr_reader :owned
+    end
+
     attr_reader :target, :info, :params
 
     def self.create(target, id: nil, queues: target.queues, depth: target.depth,
@@ -10,25 +24,49 @@ module UBLK
       info = control.add_dev(id:, queues:, depth:, max_io_bytes:, recovery:)
       params = Params.from_target(target, max_io_bytes:)
       control.set_params(info.id, params)
-      new(target, control, info, params, mlock:)
+      new(target, control, info, params, mlock:).tap { |device| owned << device }
     rescue Exception
-      control&.del_dev(info.id) if info
+      begin
+        control&.del_dev(info.id) if info
+      rescue SystemCallError, Error
+        nil
+      end
+      control&.close
       raise
     end
 
-    def self.list = Control.new.list
+    def self.list
+      control = Control.new
+      control.list
+    ensure
+      control&.close
+    end
+
+    def self.recover(target, id:, mlock: true)
+      control = Control.new
+      control.start_user_recovery(id)
+      info = control.get_dev_info(id)
+      params = Params.from_target(target, max_io_bytes: info.max_io_bytes)
+      new(target, control, info, params, mlock:, recovering: true).tap { |device| owned << device }
+    rescue Exception
+      control&.close
+      raise
+    end
 
     def self.delete_all!
       control = Control.new
       control.list.each { |item| control.del_dev(item.id) }
+    ensure
+      control&.close
     end
 
-    def initialize(target, control, info, params, mlock: true)
+    def initialize(target, control, info, params, mlock: true, recovering: false)
       @target = target
       @control = control
       @info = info
       @params = params
       @mlock = mlock
+      @recovering = recovering
       @started = false
       @deleted = false
     end
@@ -37,20 +75,54 @@ module UBLK
     def path = info.path
     def char_path = info.char_path
 
-    def start
+    def start(threads: :auto)
       raise DeviceError, "device has been deleted" if @deleted
+      return self if @started
 
-      @control.start_dev(id)
+      count = threads == :auto ? info.queues : Integer(threads)
+      raise ArgumentError, "threads must equal the hardware queue count" unless count == info.queues
+
+      Native.lock_memory! if @mlock
+      @server = Native::Server.new(id, info.queues, info.depth)
+      ready = Queue.new
+      @workers = count.times.map do |queue|
+        Thread.new do
+          @server.run(queue, target, ready)
+        rescue Exception => error
+          ready << error
+          raise
+        end
+      end
+      count.times do
+        result = ready.pop
+        raise result if result.is_a?(Exception)
+      end
+      if @recovering
+        @control.end_user_recovery(id)
+        @recovering = false
+      else
+        @control.start_dev(id)
+      end
       @started = true
       self
+    rescue Exception
+      @server&.close
+      join_workers(@workers, suppress: true)
+      @server = @workers = nil
+      raise
     end
 
     def stop
-      return self unless @started
+      return self unless @started || @server
 
-      @control.stop_dev(id)
-      @started = false
+      @control.stop_dev(id) if @started
       self
+    ensure
+      @started = false
+      server, workers = @server, @workers
+      @server = @workers = nil
+      server&.close
+      join_workers(workers)
     end
 
     def delete
@@ -59,25 +131,32 @@ module UBLK
       stop
       @control.del_dev(id)
       @deleted = true
+      self.class.owned.delete(self)
       self
+    ensure
+      @control.close if @deleted
     end
 
     def run(threads: :auto)
       raise UnsupportedError, "data plane is unavailable in this build" unless Native.const_defined?(:Server)
 
-      count = threads == :auto ? info.queues : Integer(threads)
-      raise ArgumentError, "threads must equal the hardware queue count" unless count == info.queues
-
-      Native.lock_memory! if @mlock
-      server = Native::Server.new(id, info.queues, info.depth)
-      workers = count.times.map { |queue| Thread.new { server.run(queue, target) } }
-      start
-      workers.each(&:join)
+      start(threads:)
+      @workers.each(&:join)
       self
     ensure
       stop if @started
-      server&.close
-      workers&.each { |worker| worker.join unless worker == Thread.current }
+    end
+
+    private
+
+    def join_workers(workers, suppress: false)
+      error = nil
+      workers&.each do |worker|
+        worker.join unless worker == Thread.current
+      rescue Exception => caught
+        error ||= caught
+      end
+      raise error if error && !suppress
     end
   end
 end
