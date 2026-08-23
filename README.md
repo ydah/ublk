@@ -118,6 +118,31 @@ p99 latency. No hardware-independent number is claimed: CPU, Ruby, GC, and VM
 acceleration materially change the result, and Ruby callbacks remain bounded
 by the GVL.
 
+### Reference benchmark
+
+One reproducible comparison was run on Linux 6.12.0 under QEMU TCG (2 vCPUs,
+1.5 GiB RAM), using Ruby 3.2, fio 3.36, and upstream ublksrv 1.6.1
+(`abbfea2b5918`). Both loop targets used a 256 MiB sparse file on `/tmp`, one
+queue of depth 128, and buffered backing-file I/O. fio used its io_uring engine,
+4 KiB direct I/O, iodepth 32, and one 30-second run per workload.
+
+| Target | Workload | IOPS | completion p99 |
+|---|---:|---:|---:|
+| Ruby loop | random read | 33,774 | 2.900 ms |
+| Ruby loop | random write | 33,896 | 2.376 ms |
+| Ruby loop | sequential read | 26,801 | 3.850 ms |
+| C ublksrv loop | random read | 64,213 | 0.938 ms |
+| C ublksrv loop | random write | 56,456 | 1.090 ms |
+| C ublksrv loop | sequential read | 62,011 | 0.987 ms |
+| Ruby loop, `GC.stress` | random read | 9.72 | 6.610 s |
+| Ruby loop, `GC.stress` | random write | 12.61 | 4.178 s |
+| Ruby loop, `GC.stress` | sequential read | 7.42 | 7.952 s |
+
+These are diagnostic VM results, not production performance claims. In this
+run the C loop target delivered roughly 1.7–2.3 times the IOPS of normal Ruby,
+while `GC.stress` demonstrated that stop-the-world GC can make latency
+unacceptable for block storage.
+
 ## License
 
 MIT
